@@ -1,0 +1,16 @@
+{
+	"name": "dbus-object-list",
+	"version": "1.0.0",
+	"description": "helper library for a common Dbus pattern: properties which are (perhaps changing) **object path** lists",
+	"main": "server.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"start": "node server.js"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://archive.voodoowarez.com/dbus-object-list"
+	},
+	"author": "rektide de la faye",
+	"license": "X"
+}
