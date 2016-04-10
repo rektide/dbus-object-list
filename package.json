@@ -1,11 +1,12 @@
 {
 	"name": "dbus-object-list",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "helper library for a common Dbus pattern: properties which are (perhaps changing) **object path** lists",
-	"main": "server.js",
+	"main": "dbus-object-list",
+	"bin": "dbus-object-list",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
-		"start": "node server.js"
+		"start": "node dbus-object-list"
 	},
 	"repository": {
 		"type": "git",
