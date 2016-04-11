@@ -2,52 +2,60 @@
 
 let materialize= require( "./materialize")
 
-function DbusObjectList( baseName, target, opts){
+function DbusObjectList( name, target, opts){
 	opts= opts|| {}
 	let
 	  origInterface= opts.interface,
 	  origType= opts.type
-	if( baseName instanceof Function){
-		opts.type= baseName
-		baseName= [ baseName.name.slice( 0, 1).toLowerCase(), baseName.name.slice( 1)].join( "")
+	if( name instanceof Function){ // process type early. after backing up (we stomp opts)!
+		opts.type= name
+		name= name.name
 	}
 	if( opts.type&& opts.type.interface){
 		opts.interface= opts.type.interface
 	}
+
 	let
-	  first= baseName.slice( 0, 1),
+	  emit= opts.emit,
+	  // generate some name variants. Ex: PulseAudio "card"
+	  first= name.slice( 0, 1),
+	  rest= name.slice( 1),
+	  lower= first.toLowerCase(),
+	  lowerName= emit&& first== lower? name: [lower, rest].join( ""),
 	  cap= first.toUpperCase(),
-	  rest= baseName.slice( 1),
-	  baseInterface= opts.baseInterface
+	  targetSlot= opts.targetSlot|| [ cap, rest, name.plural|| "s"].join( ""), // ex; card-> Cards
+	  newObj= [ "New", cap, rest].join( ""), // card-> NewCard
+	  removedObj= [ cap, rest, "Removed"].join( ""), // card-> CardRemoved
+	  eventTarget= opts.eventTarget&& opts.eventTarget=== true? target: opts.eventTarget,
+	  baseInterface= opts.baseInterface // org.PulseAudio.Core1
 	if( baseInterface){
-		opts.interface= [baseInterface, ".", cap, rest].join( "")
+		opts.interface= [baseInterface, ".", cap, rest].join( "") // card=> org.PulseAudio.Core1.Card
 	}
 	let
-	  newObj= [ "New", cap, rest].join( ""),
-	  removedObj= [ "Removed", cap, rest].join( ""),
-	  capPlural= [ cap, rest, baseName.plural? baseName.plural: "s"].join( ""),
-	  materializer= opts.interface? materialize( opts): null,
-	  emit= opts.emit,
+	  materializer= opts.interface? materialize( opts): null, // build a materializer, if we have an interface to materialize
 	  value= materializer? {}: [],
 	  done
 	opts.interface= origInterface
 	opts.type= origType
-	// bound below: materializer, value, emit, capPlural... oh and opts.
+	// bound below: materializer, value, emit, targetSlot, lowerName
 	if(materializer){
-		done = Promise.resolve( target).then( target=>{
+		done = Promise.all( [target, eventTarget]).then( targets=>{
+			let
+			  target= targets[ 0],
+			  eventTarget= targets[ 1]
 			return new Promise(( resolve, reject)=> {
-				target.on( newObj, newPath=>{ // subscribe to new
-					materializer( newPath, opts).then( materialized=> {
+				eventTarget&& eventTarget.on( newObj, newPath=>{ // subscribe to new
+					materializer( newPath).then( materialized=> {
 						value[ newPath]= materialized
 						if( emit){
-							emit( baseName, materialized, newPath)
+							emit( lowerName, materialized, newPath, lowerName)
 				} }) })
-				target.on( removedObj, removePath=>{ // subscribe to remove
-					delete value[ removePath]
+				eventTarget&& eventTarget.on( removedObj, removedPath=>{ // subscribe to remove
+					delete value[ removedPath]
 					if( emit){
-						emit( baseName, null, removeObj)
+						emit( lowerName, null, removedObj, lowerName)
 				} })
-				target[ capPlural](( err, initial)=>{ // retrieve initial value
+				target[ targetSlot](( err, initial)=>{ // retrieve initial value
 					if( err) return reject( err)
 					let all= initial.map( materializer)
 					Promise.all( all).then(function( all){
@@ -58,28 +66,31 @@ function DbusObjectList( baseName, target, opts){
 						resolve( value)
 					}, reject)
 	}) }) }) }else{
-		done = Promise.resolve( target).then( target=>{
+		done = Promise.all([ target, eventTarget]).then( targets=>{
+			let
+			  target= targets[ 0],
+			  eventTarget= targets[ 1]
 			return new Promise(( resolve, reject)=> {
-				target[ capPlural](( err, initial)=>{ // retrieve initial value
-					if( err) return reject( err)
-					value.push.apply( value, initial) // append
-					resolve( value)
-				})
-				target.on( newObj, newPath=>{ // subscribe to new
+				eventTarget&& eventTarget.on( newObj, newPath=>{ // subscribe to new
 					value.push( newPath)
 					if( emit){
-						emit( baseName, newPath, newPath)
+						emit( lowerName, newPath, newPath, lowerName)
 					}
 				})
-				target.on( removedObj, removePath=>{ // subscribe to remove
+				eventTarget&& eventTarget.on( removedObj, removePath=>{ // subscribe to remove
 					let i= value.indexOf( removePath)
 					if( i === -1){
 						return
 					}
 					value.splice( i, 1)
 					if( emit){
-						emit( baseName, null, removePath)
+						emit( lowerName, null, removePath, lowerName)
 					}
+				})
+				target[ targetSlot](( err, initial)=>{ // retrieve initial value
+					if( err) return reject( err)
+					value.push.apply( value, initial) // append
+					resolve( value)
 				})
 			})
 		  })

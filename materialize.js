@@ -18,7 +18,6 @@ function materialize(opts){
 		  service= Promise.resolve(serviceFactory()),
 		  materialized= service.then( service=> new Promise(( resolve, reject)=>{
 			service.getInterface( objectPath, interfaceName,( err, obj)=> {
-				console.log(objectPath, interfaceName)
 				if( err) return reject( err)
 				if( type){
 					return type.call( obj, opts).then(()=> resolve( obj)) // enhance obj with type
