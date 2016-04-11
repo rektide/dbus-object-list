@@ -1,44 +1,79 @@
 "use strict"
-function DbusObjectList( baseName, target, emit, bus){
+
+let materialize= require( "./materialize")
+
+function DbusObjectList( baseName, target, opts){
+	opts= opts|| {}
 	let
 	  first= baseName.slice( 0, 1),
 	  cap= first.toUpperCase(),
-	  rest= baseName.slice( 1),
-	  plural= rest+ (baseName.plural? baseName.plural: "s"),
-	  capPlural= cap+ plural,
-	  newObj= "New"+ capPlural,
-	  removedObj= "Removed"+ capPlural,
-	  map= {},
-	  value= [],
-	  done= Promise.resolve( target).then( target=>{
-		return new Promise(( resolve, reject)=> {
-			console.log("target", capPlural)
-			// retrieve initial value as property
-			target[ capPlural](( err, initial)=>{
-				value.push.apply( value, initial)
-				resolve( value)
-			})
-			// subscribe to new
-			target.on( newObj, newObj=>{
-				value.push( newObj)
-				if(emit){
-					emit( baseName, newObj, newObj)
-				}
-			})
-			// subscribe to remove
-			target.on( removedObj, removeObj=>{
-				let i= value.indexOf( removeObj)
-				if( i === -1){
-					return
-				}
-				value.splice( i, 1)
-				if(emit){
-					emit( baseName, null, removeObj)
-				}
+	  rest= baseName.slice( 1)
+	if( opts.baseInterface){
+		opts.interface= [opts.baseInterface, ".", cap, rest].join("")
+	}
+	let
+	  newObj= ["New", cap, rest].join(""),
+	  removedObj= ["Removed", cap, rest].join(""),
+	  plural= [rest, baseName.plural? baseName.plural: "s"].join(""),
+	  capPlural= [cap, plural].join(""),
+	  materializer= opts.interface? materialize(opts): null,
+	  emit= opts.emit,
+	  value= materializer? {}: [],
+	  done
+	if(materializer){
+		done = Promise.resolve( target).then( target=>{
+			return new Promise(( resolve, reject)=> {
+				target[ capPlural](( err, initial)=>{ // retrieve initial value
+					if( err) return reject( err)
+					for(var i of initial){
+						value[ i]= materializer( i) // materialize, & insert in map as path=> materialized
+					}
+					resolve( value)
+				})
+				target.on( newObj, newPath=>{ // subscribe to new
+					let materialized= value[ newPath]= materializer( newPath)
+					if( emit){
+						emit( baseName, materialized, newPath)
+					}
+				})
+				target.on( removedObj, removePath=>{ // subscribe to remove
+					delete value[ removePath]
+					if( emit){
+						emit( baseName, null, removeObj)
+					}
+				})
 			})
 		})
-	  })
+	}else{
+		done = Promise.resolve( target).then( target=>{
+			return new Promise(( resolve, reject)=> {
+				target[ capPlural](( err, initial)=>{ // retrieve initial value
+					if( err) return reject( err)
+					value.push.apply( value, initial) // append
+					resolve( value)
+				})
+				target.on( newObj, newPath=>{ // subscribe to new
+					value.push( newPath)
+					if( emit){
+						emit( baseName, newPath, newPath)
+					}
+				})
+				target.on( removedObj, removePath=>{ // subscribe to remove
+					let i= value.indexOf( removePath)
+					if( i === -1){
+						return
+					}
+					value.splice( i, 1)
+					if( emit){
+						emit( baseName, null, removePath)
+					}
+				})
+			})
+		  })
+	}
 	return {value, done}
 }
+
+
 
 module.exports= DbusObjectList
