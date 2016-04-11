@@ -23,28 +23,28 @@ function DbusObjectList( baseName, target, opts){
 	if(materializer){
 		done = Promise.resolve( target).then( target=>{
 			return new Promise(( resolve, reject)=> {
-				target[ capPlural](( err, initial)=>{ // retrieve initial value
-					if( err) return reject( err)
-					for(var i of initial){
-						value[ i]= materializer( i) // materialize, & insert in map as path=> materialized
-					}
-					resolve( value)
-				})
 				target.on( newObj, newPath=>{ // subscribe to new
-					let materialized= value[ newPath]= materializer( newPath)
-					if( emit){
-						emit( baseName, materialized, newPath)
-					}
-				})
+					materializer( newPath).then( materialized=> {
+						value[ newPath]= materialized
+						if( emit){
+							emit( baseName, materialized, newPath)
+				} }) })
 				target.on( removedObj, removePath=>{ // subscribe to remove
 					delete value[ removePath]
 					if( emit){
 						emit( baseName, null, removeObj)
-					}
-				})
-			})
-		})
-	}else{
+				} })
+				target[ capPlural](( err, initial)=>{ // retrieve initial value
+					if( err) return reject( err)
+					let all= initial.map( materializer)
+					Promise.all( all).then(function( all){
+						for(var i in initial){
+							let path= initial[ i]
+							value[ path]= all[ i]
+						}
+						resolve(value)
+					}, reject)
+	}) }) }) }else{
 		done = Promise.resolve( target).then( target=>{
 			return new Promise(( resolve, reject)=> {
 				target[ capPlural](( err, initial)=>{ // retrieve initial value
