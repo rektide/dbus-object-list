@@ -5,26 +5,39 @@ let materialize= require( "./materialize")
 function DbusObjectList( baseName, target, opts){
 	opts= opts|| {}
 	let
-	  first= baseName.slice( 0, 1),
-	  cap= first.toUpperCase(),
-	  rest= baseName.slice( 1)
-	if( opts.baseInterface){
-		opts.interface= [opts.baseInterface, ".", cap, rest].join("")
+	  origInterface= opts.interface,
+	  origType= opts.type
+	if( baseName instanceof Function){
+		opts.type= baseName
+		baseName= [ baseName.name.slice( 0, 1).toLowerCase(), baseName.name.slice( 1)].join( "")
+	}
+	if( opts.type&& opts.type.interface){
+		opts.interface= opts.type.interface
 	}
 	let
-	  newObj= ["New", cap, rest].join(""),
-	  removedObj= ["Removed", cap, rest].join(""),
-	  plural= [rest, baseName.plural? baseName.plural: "s"].join(""),
-	  capPlural= [cap, plural].join(""),
-	  materializer= opts.interface? materialize(opts): null,
+	  first= baseName.slice( 0, 1),
+	  cap= first.toUpperCase(),
+	  rest= baseName.slice( 1),
+	  baseInterface= opts.baseInterface
+	if( baseInterface){
+		opts.interface= [baseInterface, ".", cap, rest].join( "")
+	}
+	let
+	  newObj= [ "New", cap, rest].join( ""),
+	  removedObj= [ "Removed", cap, rest].join( ""),
+	  capPlural= [ cap, rest, baseName.plural? baseName.plural: "s"].join( ""),
+	  materializer= opts.interface? materialize( opts): null,
 	  emit= opts.emit,
 	  value= materializer? {}: [],
 	  done
+	opts.interface= origInterface
+	opts.type= origType
+	// bound below: materializer, value, emit, capPlural... oh and opts.
 	if(materializer){
 		done = Promise.resolve( target).then( target=>{
 			return new Promise(( resolve, reject)=> {
 				target.on( newObj, newPath=>{ // subscribe to new
-					materializer( newPath).then( materialized=> {
+					materializer( newPath, opts).then( materialized=> {
 						value[ newPath]= materialized
 						if( emit){
 							emit( baseName, materialized, newPath)
@@ -42,7 +55,7 @@ function DbusObjectList( baseName, target, opts){
 							let path= initial[ i]
 							value[ path]= all[ i]
 						}
-						resolve(value)
+						resolve( value)
 					}, reject)
 	}) }) }) }else{
 		done = Promise.resolve( target).then( target=>{
